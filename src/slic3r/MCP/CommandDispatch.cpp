@@ -10,6 +10,8 @@
 #include "libslic3r/PrintConfig.hpp"
 #include "libslic3r/Print.hpp"
 #include "libslic3r/GCode/ThumbnailData.hpp"
+#include "GUI/PartPlate.hpp"
+#include "libslic3r/GCode/GCodeProcessor.hpp"
 #include <miniz.h>
 #include <GL/glew.h>
 
@@ -625,20 +627,41 @@ void CommandDispatch::register_diagnostics_commands() {
             auto* plater = wxGetApp().plater();
             const auto& print = plater->fff_print();
             bool slicing = plater->is_background_process_slicing();
-            bool finished = print.finished();
+
+            // Print::finished() only turns true after the G-code EXPORT step, which the
+            // background process never runs, so it reported false even for a completed
+            // slice. The plate's own slice-result flag is what the GUI relies on.
+            auto& plate_list = plater->get_partplate_list();
+            PartPlate* plate = plate_list.get_curr_plate();
+            const bool slice_valid = (plate != nullptr) && plate->is_slice_result_valid();
 
             json result;
             result["slicing"] = slicing;
-            result["finished"] = finished;
+            result["slice_result_valid"] = slice_valid;
+            result["finished"] = !slicing && slice_valid;
+            // Not slicing and no valid result means the slice produced nothing
+            // (failed, cancelled, or never started).
+            result["failed"] = !slicing && !slice_valid;
 
-            const auto& stats = print.print_statistics();
-            if (!stats.estimated_normal_print_time.empty()) {
-                result["print_time"] = stats.estimated_normal_print_time;
-                result["filament_used_mm"] = stats.total_used_filament;
-                result["filament_used_cm3"] = stats.total_extruded_volume;
-                result["filament_cost"] = stats.total_cost;
-                result["filament_weight_g"] = stats.total_weight;
-                result["total_toolchanges"] = stats.total_toolchanges;
+            if (slice_valid && plate != nullptr) {
+                const GCodeProcessorResult* gres = plate->get_slice_result();
+                if (gres != nullptr) {
+                    const auto& ps = gres->print_statistics;
+                    const auto& mode = ps.modes[static_cast<size_t>(
+                        PrintEstimatedStatistics::ETimeMode::Normal)];
+                    result["print_time_s"] = mode.time;
+                    result["prepare_time_s"] = mode.prepare_time;
+
+                    double model_mm3 = 0.0, support_mm3 = 0.0, total_mm3 = 0.0;
+                    for (const auto& kv : ps.model_volumes_per_extruder)   model_mm3 += kv.second;
+                    for (const auto& kv : ps.support_volumes_per_extruder) support_mm3 += kv.second;
+                    for (const auto& kv : ps.total_volumes_per_extruder)   total_mm3 += kv.second;
+                    result["filament_model_mm3"]   = model_mm3;
+                    result["filament_support_mm3"] = support_mm3;
+                    result["filament_total_mm3"]   = total_mm3;
+                    // length of 1.75 mm filament: V / (pi * r^2), r = 0.875
+                    result["filament_total_mm"] = total_mm3 / (3.14159265358979323846 * 0.875 * 0.875);
+                }
             }
 
             // Check for validation errors
