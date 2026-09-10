@@ -14453,6 +14453,28 @@ void Plater::apply_cut_object_to_model(size_t obj_idx, const ModelObjectPtrs& ne
     // w.wait_for_idle();
 }
 
+// Non-interactive G-code export used by the MCP server. Same pipeline as
+// export_gcode() below, but takes the destination path directly instead of
+// opening a file dialog, so the slicer can be driven programmatically.
+bool Plater::export_gcode_to_path(const std::string& path)
+{
+    if (path.empty() || p->model.objects.empty())
+        return false;
+    if (p->process_completed_with_error == p->partplate_list.get_curr_plate_index())
+        return false;
+
+    unsigned int state = this->p->update_restart_background_process(false, false);
+    if (state & priv::UPDATE_BACKGROUND_PROCESS_INVALID)
+        return false;
+
+    fs::path output_path(path);
+    p->exporting_status = ExportingStatus::EXPORTING_TO_LOCAL;
+    p->last_output_path = output_path.string();
+    p->last_output_dir_path = output_path.parent_path().string();
+    p->export_gcode(output_path, false);
+    return true;
+}
+
 void Plater::export_gcode(bool prefer_removable)
 {
     if (p->model.objects.empty())
