@@ -247,7 +247,7 @@ void CommandDispatch::register_model_commands() {
                 o["index"] = i;
                 o["name"] = obj->name;
                 o["volumes"] = obj->volumes.size();
-                auto bb = obj->bounding_box_approx();
+                auto bb = obj->bounding_box_exact();
                 o["bounding_box"] = {
                     {"min", {bb.min.x(), bb.min.y(), bb.min.z()}},
                     {"max", {bb.max.x(), bb.max.y(), bb.max.z()}}
@@ -346,7 +346,13 @@ void CommandDispatch::register_model_commands() {
             }
             if (params.contains("rotate")) {
                 auto r = params["rotate"];
-                inst->set_rotation(Vec3d(r[0].get<double>(), r[1].get<double>(), r[2].get<double>()));
+                // The tool schema documents these as DEGREES, but ModelInstance::set_rotation
+                // expects RADIANS. Without this conversion "rotate":[0,0,90] applies 90 radians
+                // (~116.6 deg after wrapping) instead of 90 degrees.
+                constexpr double deg2rad = 3.14159265358979323846 / 180.0;
+                inst->set_rotation(Vec3d(r[0].get<double>() * deg2rad,
+                                         r[1].get<double>() * deg2rad,
+                                         r[2].get<double>() * deg2rad));
             }
 
             obj->invalidate_bounding_box();
@@ -505,7 +511,7 @@ void CommandDispatch::register_diagnostics_commands() {
                 json o;
                 o["index"] = i;
                 o["name"] = obj->name;
-                auto bb = obj->bounding_box_approx();
+                auto bb = obj->bounding_box_exact();
                 o["bounding_box"] = {
                     {"min", {bb.min.x(), bb.min.y(), bb.min.z()}},
                     {"max", {bb.max.x(), bb.max.y(), bb.max.z()}}
@@ -567,7 +573,7 @@ void CommandDispatch::register_diagnostics_commands() {
                 vs["open_edges"] = stats.open_edges;
                 result["volumes"].push_back(vs);
             }
-            auto bb = obj->bounding_box_approx();
+            auto bb = obj->bounding_box_exact();
             result["bounding_box"] = {
                 {"min", {bb.min.x(), bb.min.y(), bb.min.z()}},
                 {"max", {bb.max.x(), bb.max.y(), bb.max.z()}}
