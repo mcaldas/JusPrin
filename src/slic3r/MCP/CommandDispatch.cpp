@@ -585,11 +585,21 @@ void CommandDispatch::register_diagnostics_commands() {
     register_command("diagnostics.validate", [this](const json& /*params*/) -> json {
         return call_on_gui_thread([&]() -> json {
             auto* plater = wxGetApp().plater();
+            // Refresh the Print from the current plate first. Validating a stale or
+            // empty Print reports "valid" for plates that cannot actually be sliced
+            // (e.g. an object with an empty first layer).
+            plater->update(false, true);
+
+            bool model_fits = true, validate_error = false;
+            plater->validate_current_plate(model_fits, validate_error);
+
             const auto& print = plater->fff_print();
             StringObjectException warning;
             auto err = print.validate(&warning);
+
             json result;
-            result["valid"] = err.string.empty();
+            result["valid"] = model_fits && !validate_error && err.string.empty();
+            result["model_fits"] = model_fits;
             if (!err.string.empty())
                 result["error"] = err.string;
             if (!warning.string.empty())
@@ -601,6 +611,10 @@ void CommandDispatch::register_diagnostics_commands() {
     register_command("diagnostics.slice", [this](const json& /*params*/) -> json {
         return call_on_gui_thread([&]() -> json {
             auto* plater = wxGetApp().plater();
+            // Push the current model + config into the background Print first.
+            // Without this the background process has no task, so reslice()
+            // returns immediately and nothing is ever sliced.
+            plater->update(false, true);
             plater->reslice();
             return json{{"slicing", "started"}};
         });
