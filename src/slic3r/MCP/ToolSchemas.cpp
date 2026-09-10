@@ -141,6 +141,84 @@ std::vector<McpToolDef> get_all_tool_definitions()
         "model.add_part"
     });
 
+    tools.push_back({
+        "arrange",
+        "Auto-arrange every object on the current plate so nothing overlaps and everything sits inside the printable area. Run this after loading or duplicating objects.",
+        {{"type", "object"}, {"properties", json::object()}},
+        "plate.arrange"
+    });
+
+    tools.push_back({
+        "auto_orient",
+        "Let the slicer choose an orientation for the objects on the plate, minimising overhangs and support. Overrides any manual rotation.",
+        {{"type", "object"}, {"properties", json::object()}},
+        "plate.auto_orient"
+    });
+
+    tools.push_back({
+        "plate_list",
+        "Report how many plates exist and which one is currently selected.",
+        {{"type", "object"}, {"properties", json::object()}},
+        "plate.list"
+    });
+
+    tools.push_back({
+        "plate_add",
+        "Add a new empty plate and return its index.",
+        {{"type", "object"}, {"properties", json::object()}},
+        "plate.add"
+    });
+
+    tools.push_back({
+        "plate_select",
+        "Switch the active plate. Slicing, export and get_state all act on the active plate.",
+        {
+            {"type", "object"},
+            {"properties", {{"index", {{"type", "integer"}, {"description", "Plate index (0-based)"}}}}},
+            {"required", json::array({"index"})}
+        },
+        "plate.select"
+    });
+
+    tools.push_back({
+        "object_duplicate",
+        "Add more instances (copies) of an existing object. Copies are nudged apart; call arrange afterwards for a proper layout.",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"index", {{"type", "integer"}, {"description", "Index of the object to copy"}}},
+                {"count", {{"type", "integer"}, {"description", "How many extra copies to add (default 1)"}}}
+            }},
+            {"required", json::array({"index"})}
+        },
+        "object.duplicate"
+    });
+
+    tools.push_back({
+        "object_set_config",
+        "Override print settings for ONE object only, leaving the rest of the plate on the global process preset. Accepts the same keys as config_set (e.g. wall_loops, sparse_infill_density, enable_support). This is how you give different objects different settings in a single print.",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"index",    {{"type", "integer"}, {"description", "Index of the object"}}},
+                {"settings", {{"type", "object"}, {"additionalProperties", true}, {"description", "Key/value setting overrides for this object"}}}
+            }},
+            {"required", json::array({"index","settings"})}
+        },
+        "object.set_config"
+    });
+
+    tools.push_back({
+        "object_get_config",
+        "Read the per-object setting overrides currently applied to one object (empty if it just follows the global preset).",
+        {
+            {"type", "object"},
+            {"properties", {{"index", {{"type", "integer"}, {"description", "Index of the object"}}}}},
+            {"required", json::array({"index"})}
+        },
+        "object.get_config"
+    });
+
     // -----------------------------------------------------------------------
     // Config tools
     // -----------------------------------------------------------------------
