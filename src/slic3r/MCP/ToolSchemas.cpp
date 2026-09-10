@@ -124,6 +124,23 @@ std::vector<McpToolDef> get_all_tool_definitions()
         "model.export_gcode"
     });
 
+    tools.push_back({
+        "add_part",
+        "Attach a mesh file to an existing object as an extra volume: a support blocker (keeps supports out of a region), a support enforcer, a negative volume (subtracts), a parameter modifier, or another model part. The mesh keeps its own coordinates, so it must already be aligned with the target object. Use this for support-blocker meshes authored alongside the model.",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"index", {{"type", "integer"}, {"description", "Index of the object to attach to"}}},
+                {"path",  {{"type", "string"},  {"description", "Absolute path to the mesh file (.stl/.3mf)"}}},
+                {"type",  {{"type", "string"},
+                           {"enum", json::array({"support_blocker","support_enforcer","negative","modifier","part"})},
+                           {"description", "Volume type (default: support_blocker)"}}}
+            }},
+            {"required", json::array({"index","path"})}
+        },
+        "model.add_part"
+    });
+
     // -----------------------------------------------------------------------
     // Config tools
     // -----------------------------------------------------------------------
