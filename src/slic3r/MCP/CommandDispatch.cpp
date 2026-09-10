@@ -390,6 +390,132 @@ void CommandDispatch::register_model_commands() {
 // Config commands
 // ---------------------------------------------------------------------------
 void CommandDispatch::register_config_commands() {
+    register_command("plate.arrange", [this](const json& /*params*/) -> json {
+        return call_on_gui_thread([&]() -> json {
+            auto* plater = wxGetApp().plater();
+            if (!plater->can_arrange())
+                return json{{"error", "Cannot arrange right now"}};
+            plater->arrange();
+            return json{{"arranged", true}};
+        });
+    });
+
+    register_command("plate.auto_orient", [this](const json& /*params*/) -> json {
+        return call_on_gui_thread([&]() -> json {
+            auto* plater = wxGetApp().plater();
+            plater->orient();
+            return json{{"oriented", true}};
+        });
+    });
+
+    register_command("plate.list", [this](const json& /*params*/) -> json {
+        return call_on_gui_thread([&]() -> json {
+            auto* plater = wxGetApp().plater();
+            auto& pl = plater->get_partplate_list();
+            json result;
+            result["count"] = pl.get_plate_count();
+            result["current"] = pl.get_curr_plate_index();
+            return result;
+        });
+    });
+
+    register_command("plate.add", [this](const json& /*params*/) -> json {
+        return call_on_gui_thread([&]() -> json {
+            auto* plater = wxGetApp().plater();
+            auto& pl = plater->get_partplate_list();
+            int idx = pl.create_plate(true);
+            plater->update();
+            return json{{"created_index", idx}, {"count", pl.get_plate_count()}};
+        });
+    });
+
+    register_command("plate.select", [this](const json& params) -> json {
+        return call_on_gui_thread([&]() -> json {
+            int index = params.value("index", -1);
+            auto* plater = wxGetApp().plater();
+            auto& pl = plater->get_partplate_list();
+            if (index < 0 || index >= pl.get_plate_count())
+                return json{{"error", "Invalid plate index"}};
+            pl.select_plate(index);
+            plater->update();
+            return json{{"selected", index}};
+        });
+    });
+
+    register_command("object.duplicate", [this](const json& params) -> json {
+        return call_on_gui_thread([&]() -> json {
+            int index = params.value("index", -1);
+            int count = params.value("count", 1);
+            auto* plater = wxGetApp().plater();
+            Model& model = plater->model();
+            if (index < 0 || index >= (int)model.objects.size())
+                return json{{"error", "Invalid object index"}};
+            if (count < 1) count = 1;
+
+            ModelObject* obj = model.objects[index];
+            if (obj->instances.empty())
+                return json{{"error", "Object has no instances"}};
+
+            for (int k = 0; k < count; ++k) {
+                ModelInstance* inst = obj->add_instance(*obj->instances.front());
+                // offset so copies do not sit exactly on top of each other;
+                // call plate.arrange afterwards for a proper layout.
+                inst->set_offset(inst->get_offset() + Vec3d(10.0 * (k + 1), 0.0, 0.0));
+            }
+            obj->invalidate_bounding_box();
+            plater->changed_object(index);
+            return json{{"object_index", index}, {"instances", obj->instances.size()}};
+        });
+    });
+
+    register_command("object.set_config", [this](const json& params) -> json {
+        return call_on_gui_thread([&]() -> json {
+            int index = params.value("index", -1);
+            auto* plater = wxGetApp().plater();
+            Model& model = plater->model();
+            if (index < 0 || index >= (int)model.objects.size())
+                return json{{"error", "Invalid object index"}};
+            if (!params.contains("settings") || !params["settings"].is_object())
+                return json{{"error", "No settings object provided"}};
+
+            const json& settings = params["settings"];
+            DynamicPrintConfig cfg;
+            json applied = json::array();
+            for (auto it = settings.begin(); it != settings.end(); ++it) {
+                const std::string& key = it.key();
+                const std::string val = it.value().is_string() ? it.value().get<std::string>() : it.value().dump();
+                if (print_config_def.has(key)) {
+                    cfg.set_deserialize_strict(key, val);
+                    applied.push_back(key);
+                }
+            }
+            if (cfg.empty())
+                return json{{"error", "No valid setting keys provided"}};
+
+            // ModelConfig::apply() bumps the timestamp itself.
+            model.objects[index]->config.apply(cfg, true);
+            plater->changed_object(index);
+            return json{{"object_index", index}, {"applied", applied}};
+        });
+    });
+
+    register_command("object.get_config", [this](const json& params) -> json {
+        return call_on_gui_thread([&]() -> json {
+            int index = params.value("index", -1);
+            auto* plater = wxGetApp().plater();
+            Model& model = plater->model();
+            if (index < 0 || index >= (int)model.objects.size())
+                return json{{"error", "Invalid object index"}};
+            const DynamicPrintConfig& cfg = model.objects[index]->config.get();
+            json result;
+            for (const auto& k : cfg.keys()) {
+                const ConfigOption* opt = cfg.option(k);
+                if (opt != nullptr) result[k] = opt->serialize();
+            }
+            return json{{"object_index", index}, {"overrides", result}};
+        });
+    });
+
     register_command("model.add_part", [this](const json& params) -> json {
         return call_on_gui_thread([&]() -> json {
             int index = params.value("index", -1);
