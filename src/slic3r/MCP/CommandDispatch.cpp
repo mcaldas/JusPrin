@@ -390,6 +390,26 @@ void CommandDispatch::register_model_commands() {
 // Config commands
 // ---------------------------------------------------------------------------
 void CommandDispatch::register_config_commands() {
+    register_command("model.export_gcode", [this](const json& params) -> json {
+        return call_on_gui_thread([&]() -> json {
+            std::string path = params.value("path", "");
+            if (path.empty())
+                return json{{"error", "No path provided"}};
+
+            auto* plater = wxGetApp().plater();
+            auto& plate_list = plater->get_partplate_list();
+            PartPlate* plate = plate_list.get_curr_plate();
+            if (plate == nullptr || !plate->is_slice_result_valid())
+                return json{{"error", "Plate has no valid slice result - slice first"}};
+
+            if (!plater->export_gcode_to_path(path))
+                return json{{"error", "Export could not be started (empty plate, invalid config, or a previous slice failed)"}};
+
+            // The export runs on the background process; poll for the file to appear.
+            return json{{"export_started", path}};
+        });
+    });
+
     register_command("config.get", [this](const json& params) -> json {
         return call_on_gui_thread([&]() -> json {
             auto config = wxGetApp().preset_bundle->full_config();
