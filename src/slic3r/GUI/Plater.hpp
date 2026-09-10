@@ -482,6 +482,9 @@ public:
     void send_to_printer(bool isall = false);
     void export_gcode(bool prefer_removable);
     void export_gcode_3mf(bool export_all = false);
+    // Non-interactive G-code export (no file dialog) so the slicer can be driven
+    // programmatically, e.g. by the MCP server.
+    bool export_gcode_to_path(const std::string& path);
     void send_gcode_finish(wxString name);
     void export_core_3mf();
     static TriangleMesh combine_mesh_fff(const ModelObject& mo, int instance_id, std::function<void(const std::string&)> notify_func = {});
