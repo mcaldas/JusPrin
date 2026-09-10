@@ -111,6 +111,19 @@ std::vector<McpToolDef> get_all_tool_definitions()
         "model.export"
     });
 
+    tools.push_back({
+        "export_gcode",
+        "Export the sliced plate to a G-code file. The plate must already be sliced successfully (check slice_status.slice_result_valid). The path must be absolute and end in .gcode. Export runs asynchronously on the background process, so poll for the file to appear on disk.",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"path", {{"type", "string"}, {"description", "Absolute path for the G-code file (.gcode)"}}}
+            }},
+            {"required", json::array({"path"})}
+        },
+        "model.export_gcode"
+    });
+
     // -----------------------------------------------------------------------
     // Config tools
     // -----------------------------------------------------------------------
