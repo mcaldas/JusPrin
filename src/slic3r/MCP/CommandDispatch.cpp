@@ -390,6 +390,56 @@ void CommandDispatch::register_model_commands() {
 // Config commands
 // ---------------------------------------------------------------------------
 void CommandDispatch::register_config_commands() {
+    register_command("model.add_part", [this](const json& params) -> json {
+        return call_on_gui_thread([&]() -> json {
+            int index = params.value("index", -1);
+            std::string path = params.value("path", "");
+            std::string type_s = params.value("type", "support_blocker");
+            if (path.empty())
+                return json{{"error", "No path provided"}};
+
+            auto* plater = wxGetApp().plater();
+            Model& model = plater->model();
+            if (index < 0 || index >= (int)model.objects.size())
+                return json{{"error", "Invalid object index"}};
+
+            ModelVolumeType vtype;
+            if      (type_s == "support_blocker")  vtype = ModelVolumeType::SUPPORT_BLOCKER;
+            else if (type_s == "support_enforcer") vtype = ModelVolumeType::SUPPORT_ENFORCER;
+            else if (type_s == "negative")         vtype = ModelVolumeType::NEGATIVE_VOLUME;
+            else if (type_s == "modifier")         vtype = ModelVolumeType::PARAMETER_MODIFIER;
+            else if (type_s == "part")             vtype = ModelVolumeType::MODEL_PART;
+            else return json{{"error", "Unknown type: " + type_s}};
+
+            Model tmp;
+            try {
+                tmp = Model::read_from_file(path);
+            } catch (const std::exception& e) {
+                return json{{"error", std::string("Failed to read mesh: ") + e.what()}};
+            }
+            if (tmp.objects.empty() || tmp.objects.front()->volumes.empty())
+                return json{{"error", "No mesh found in file: " + path}};
+
+            TriangleMesh mesh = tmp.objects.front()->volumes.front()->mesh();
+            ModelObject* obj = model.objects[index];
+            // keep the mesh's own coordinates so it stays aligned with the parent object
+            ModelVolume* vol = obj->add_volume(std::move(mesh), vtype, false);
+            if (vol == nullptr)
+                return json{{"error", "Failed to add volume"}};
+            vol->name = boost::filesystem::path(path).filename().string();
+
+            obj->invalidate_bounding_box();
+            plater->update();
+
+            json result;
+            result["added"] = vol->name;
+            result["type"] = type_s;
+            result["object_index"] = index;
+            result["volumes"] = obj->volumes.size();
+            return result;
+        });
+    });
+
     register_command("model.export_gcode", [this](const json& params) -> json {
         return call_on_gui_thread([&]() -> json {
             std::string path = params.value("path", "");
